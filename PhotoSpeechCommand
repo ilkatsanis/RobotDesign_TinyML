@@ -1,0 +1,57 @@
+import time
+import serial.tools.list_ports
+import warnings
+import cv2
+#
+# /dev/cu.usbmodem11301 - Nano 33 BLE
+
+cap = cv2.VideoCapture(1)  # change to 1 to use internal webcam
+faceCascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+i = 0
+
+arduino_ports = [
+    p.device
+    for p in serial.tools.list_ports.comports()
+    if 'Nano 33 BLE' in p.description  # may need tweaking to match new arduinos
+]
+if not arduino_ports:
+    raise IOError("No Arduino found")
+if len(arduino_ports) > 1:
+    warnings.warn('Multiple Arduinos found - using the first')
+
+Arduino = serial.Serial(arduino_ports[0])
+print("Connect to Arduino")
+
+time.sleep(1)
+
+Arduino.baudrate = 115200
+# Arduino.open()
+mylist = []
+while True:
+    i = i + 1
+    success, img = cap.read()
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # convert image to gray scale
+    faces = faceCascade.detectMultiScale(gray, 1.1, 6)  # detect the face
+
+    if Arduino.in_waiting:
+        packet = Arduino.readline()
+        mylist = packet
+        print(mylist.decode('utf').rstrip('\n'))
+        if b'Photo!' in packet:
+            # save photo with different name every time
+            cv2.imwrite('photos/image {0}.jpg'.format(i), img)
+            print("photo saved")
+
+    for x, y, w, h in faces:
+        # cv2.circle(img, (x + w // 2, y + h // 2), 2, (0, 255, 0), 2)
+        # Draw rectangle around face
+        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 3)
+
+    cv2.imshow("Image", img)
+    if cv2.waitKey(1) & 0xFF == ord('q'):  # press q to exit
+        break
+
+# When done, release capture
+cap.release()
+cv2.destroyAllWindows()
