@@ -1,0 +1,54 @@
+# import modules
+import cv2
+from deepface import DeepFace
+# import cvzone
+# import numpy as np
+from cvzone.FaceMeshModule import FaceMeshDetector
+
+# faceCascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')  # load classifier
+
+# open camera
+cap = cv2.VideoCapture(0)
+detector = FaceMeshDetector(maxFaces=1)
+fourcc = cv2.VideoWriter_fourcc(*'XVID')  # fourcc code, 4 bytes video codec
+# path to save the file, fourcc code, frame rate (per second), dimensions of the video
+out = cv2.VideoWriter('C:/Users/dpsdd18003/PycharmProjects/emotionRecognition/video.avi', fourcc, 20.0, (640, 480))
+
+if not cap.isOpened():
+    raise IOError("Cannot open webcam")
+
+while True:
+    success, img = cap.read()
+    img, faces = detector.findFaceMesh(img, draw=False)
+    result = DeepFace.analyze(img, enforce_detection=False, actions=['emotion'])  # load deepface emotion recognition
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # convert to grayscale
+    # faces = faceCascade.detectMultiScale(gray, 1.1, 4)
+
+    # draw rectangle around face
+    if faces:
+        face = faces[0]
+        pointLeft = face[145]
+        pointRight = face[374]
+        # cv2.circle(img, pointLeft, 5, (255, 0, 255), cv2.FILLED)
+        # cv2.circle(img, pointRight, 5, (255, 0, 255), cv2.FILLED)
+
+    # write the emotion
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(img,
+                result['dominant_emotion'],
+                (50, 50),
+                font, 1,
+                (0, 0, 255),
+                2,
+                cv2.LINE_4)
+
+    if success:
+        cv2.imshow("Image", img)
+        out.write(img)  # write method to write the frame to the file
+
+    # press q to exit
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
