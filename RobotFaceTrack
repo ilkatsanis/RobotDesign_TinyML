@@ -1,0 +1,182 @@
+import cv2
+import numpy as np
+import face_recognition
+import os
+# import serial
+import time
+import serial.tools.list_ports
+# import warnings
+import gtts
+from playsound import playsound
+
+# faceCascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+
+
+# Select manually the arduino port
+port = "/dev/cu.usbmodem1301"
+# try connection to Arduino
+try:
+    Arduino = serial.Serial(port)
+    print("Connect to Arduino")
+except:
+    print("Connection failed")
+
+"""
+Routine to automatically select the port
+where Arduino is connected. No need 
+to define it manually.
+"""
+
+"""
+Create a text to speech function for
+the robot's speech when is turned on.
+"""
+
+
+def speech():
+    ttsGreet = gtts.gTTS("Hello from robot! Nice to see you again!")
+    ttsGreet.save("hello.mp3")
+    playsound("hello.mp3")
+
+
+# arduino_ports = [
+#     p.device
+#     for p in serial.tools.list_ports.comports()
+#     if 'IOUSBHostDevice' in p.description  # may need tweaking to match new arduinos
+# ]
+# if not arduino_ports:
+#     raise IOError("No Arduino found")
+# if len(arduino_ports) > 1:
+#     warnings.warn('Multiple Arduinos found - using the first')
+#
+# Arduino = serial.Serial(arduino_ports[0])
+# print("Connect to Arduino")
+
+time.sleep(1)
+
+for i in range(1):
+    speech()
+
+time.sleep(1)
+
+path = 'attendance'  # define the folder path
+images = []  # create images list
+classNames = []  # create a list of the images' names
+myList = os.listdir(path)  # store the folder items in this variable
+print(myList)
+
+# import images of the folder, one by one
+for cl in myList:
+    curImg = cv2.imread(f'{path}/{cl}')
+    images.append(curImg)
+    classNames.append(os.path.splitext(cl)[0])  # display only the name, without the extension (jpeg)
+print(classNames)
+
+
+# find encodings of images
+def findEncodings(images1):
+    encodingslist = []  # create a list of all encodings
+    # loop through all images
+    for img1 in images1:
+        img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)  # convert to RGB
+        encode = face_recognition.face_encodings(img1)[0]  # find encodings
+        encodingslist.append(encode)  # append the encodings to the list
+    return encodingslist
+
+
+# call the function for known faces
+encodeListKnown = findEncodings(images)
+# print(len(encodeListKnown))  # test the length of encodings
+print('encoding complete')
+
+# detect faces from webcam
+cap = cv2.VideoCapture(1)
+i = 0
+
+while True:
+    i = i + 1
+    success, img = cap.read()
+
+    # resize image to increase speed (1/4 size)
+    imgSmall = cv2.resize(img, (0, 0), None, 0.25, 0.25)
+    # convert to RGB
+    imgSmall = cv2.cvtColor(imgSmall, cv2.COLOR_BGR2RGB)
+
+    """
+    faces = faceCascade.detectMultiScale(
+        img,
+        1.1,
+        minNeighbors=5,
+        minSize=(30, 30),
+        flags=cv2.CASCADE_SCALE_IMAGE)
+    """
+
+    # find the encoding from webcam
+    facesCurFrame = face_recognition.face_locations(imgSmall)
+    encodesCurFrame = face_recognition.face_encodings(imgSmall, facesCurFrame)
+
+    """
+    find matches through faces
+    takes one face location from faces 
+    and one encode from encodes
+    """
+    for encodeFace, faceLoc in zip(encodesCurFrame, facesCurFrame):
+        matches = face_recognition.compare_faces(encodeListKnown, encodeFace)
+        faceDist = face_recognition.face_distance(encodeListKnown, encodeFace)
+        # find the lowest element of list means is the best match
+        matchIndex = np.argmin(faceDist)  # gives the index of faceDist
+
+        if matches[matchIndex]:
+            name = classNames[matchIndex]
+            print(name)
+
+            y1, x2, y2, x1 = faceLoc
+            # multiply to rescale image
+            y1, x2, y2, x1 = y1 * 4, x2 * 4, y2 * 4, x1 * 4
+            # draw rectangle around the face
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+            # another rectangle for the name
+            # cv2.rectangle(img, (x1, y2 - 35), (x2, y2), (0, 255, 0), cv2.FILLED)
+            # text of name
+            cv2.putText(img, name, (x1 + 6, y2 - 6), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+            # follow the specified face
+            if name == 'ilias':
+                data = 'X{0:d}Y{1:d}'.format((x1 + x2 // 2), (y1 + y2 // 2))
+                # print(data)
+                # encode data. Uncomment when arduino is connected
+                # Arduino.write(data.encode('utf-8'))
+
+            """
+            Robot will not follow any other face.
+            Here are some examples.
+            """
+            if name == 'Lewis Hamilton':
+                cv2.putText(img, 'I WILL NOT FOLLOW YOU', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            (255, 255, 255), 2)
+            if name == 'Sebastian Vettel':
+                cv2.putText(img, 'I WILL NOT FOLLOW YOU', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            (255, 255, 255), 2)
+            if name == 'Max Verstappen':
+                cv2.putText(img, 'I WILL NOT FOLLOW YOU', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            (255, 255, 255), 2)
+            if name == 'Valtteri Bottas':
+                cv2.putText(img, 'I WILL NOT FOLLOW YOU', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            (255, 255, 255), 2)
+            # cv2.flip(img, 1)
+            break
+
+    cv2.imshow("Webcam", img)
+
+    # press q to exit
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+    # press y to take photo
+    if cv2.waitKey(1) & 0xFF == ord('y'):
+        # save photo with different name every time
+        cv2.imwrite('photos/image {0}.jpg'.format(i), img)
+        print("photo saved")
+
+cap.release()
+cv2.destroyAllWindows()
